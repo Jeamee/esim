@@ -1,0 +1,17 @@
+{
+    "configurations": {
+      "pydebug: Launch": {
+        "adapter": "debugpy",
+        "configuration": {
+          "name": "pydebug: Launch",
+          "type": "python",
+          "request": "launch",
+          "python": "~/miniconda3/envs/py37/bin/python",
+          "stopOnEntry": true,
+          "console": "externalTerminal",
+          "debugOptions": [],
+          "program": "./data.py"
+        }
+      }
+    }
+  }
