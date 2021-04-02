@@ -3,7 +3,8 @@ from pathlib import Path
 
 from torch.utils.data import DataLoader
 from torch.optim import AdamW, SGD
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.nn.utils import clip_grad_norm_
 from torch.nn import CrossEntropyLoss
 from sklearn.metrics import roc_auc_score
 
@@ -25,7 +26,7 @@ def validate(model, data):
         labels = []
         for step, data in enumerate(data):
             start_time = time.time()
-            outputs = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            outputs, _ = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
             prob = outputs.tolist()
             probs.extend(prob)
             label = data["label"].tolist()
@@ -51,6 +52,7 @@ def main():
     parser.add_argument("--learning_rate", type=float, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--max_length", type=int, required=True)
+    parser.add_argument("--max_grad_norm", type=int, required=True)
 
     args = parser.parse_args()
 
@@ -77,10 +79,10 @@ def main():
     dev_dataset = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)
 
     logging.info("init model")
-    model = ESIMV1(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
+    model = ESIM(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
     optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     # optimizer = SGD(model.parameters(), lr=args.learning_rate)
-    # scheduler = StepLR(optimizer, step_size=10, gamma=0.3)
+    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=0)
     criterion = CrossEntropyLoss()
 
     if has_cuda:
@@ -91,15 +93,23 @@ def main():
     logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
     for epoch in range(args.epoch):
         running_loss = 0.0
+        epoch_acc_num, epoche_total_num = 0, 0
         for step, data in enumerate(train_dataset):
             start_time = time.time()
             optimizer.zero_grad()
 
-            outputs = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            outputs, labels = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
             loss = criterion(outputs, data["label"])
             loss.backward()
+
+            for gold, pred in zip(data["label"], labels):
+                if gold == pred:
+                    epoch_acc_num += 1
+                epoche_total_num += 1
+
+            clip_grad_norm_(model.parameters(), args.max_grad_norm)
             optimizer.step()
-            # scheduler.step()
+
             
             end_time = time.time()
             running_loss += loss.item()
@@ -110,6 +120,8 @@ def main():
                 neg_auc, pos_auc = validate(model, dev_dataset)
                 logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
                 torch.save(model, Path(args.checkpoint) / f"{epoch}_{step}.pt")
+        epoch_acc = epoch_acc_num / epoche_total_num
+        scheduler.step(epoch_acc)
 
 
 if __name__ == "__main__":

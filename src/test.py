@@ -23,7 +23,7 @@ def test(model, data):
     with torch.no_grad():
         probs = []
         for data in tqdm(data, total=len(data)):
-            outputs = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            outputs, _ = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
             prob = outputs.tolist()
             prob = [str(i[1]) for i in prob]
             probs.extend(prob)

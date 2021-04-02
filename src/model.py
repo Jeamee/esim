@@ -7,35 +7,51 @@ import torch.nn.functional as F
 
 
 class ESIM(nn.Module):
-    def __init__(self, vocab_size, embedding_size, emb) -> None:
+    def __init__(self, vocab_size, embedding_size, emb, max_len=64, dropout=0.5) -> None:
         super().__init__()
 
-        self._emb = nn.Embedding(vocab_size, embedding_size)
+        self._emb = nn.Embedding(vocab_size, embedding_size, max_len)
         self._emb.from_pretrained(emb)
+        self.dropout = nn.Dropout(p=dropout)
         self._encoder = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
-        self._soft_attention = nn.MultiheadAttention(embedding_size * 2, 6, dropout=0.1)
+        nn.init.orthogonal_(self._encoder.weight_ih_l0)
+        nn.init.orthogonal_(self._encoder.weight_hh_l0)
+        self._soft_attention = nn.MultiheadAttention(embedding_size * 2, 1, dropout=0)
         self._projector = nn.Linear(embedding_size * 8, embedding_size)
         self._compositor = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
-        self._mlp_1 = nn.Linear(embedding_size * 8, embedding_size)
-        self._mlp_2 = nn.Linear(embedding_size, 2)
-        self._softmax = nn.Softmax(dim=1)
+        nn.init.orthogonal_(self._compositor.weight_ih_l0)
+        nn.init.orthogonal_(self._compositor.weight_hh_l0)
+        self._classifier = nn.Sequential(
+                nn.Dropout(p=dropout),
+                nn.Linear(embedding_size * 8, embedding_size),
+                nn.Tanh(),
+                nn.Dropout(p=dropout),
+                nn.Linear(embedding_size, 2),
+                nn.Softmax(dim=1)
+                )
 
-    def forward(self, premises, hypotheses):
+    def forward(self, premises, premises_mask, hypotheses, hypotheses_mask):
         '''input: premises and  hypotheses shape is (L, N)
         '''
 
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
+        emb_premises += premises_mask
+        emb_hypotheses += hypotheses_mask
         logging.debug(emb_hypotheses.shape)
 
         # (N, L, E)
         emb_premises = torch.transpose(emb_premises, 0, 1)
         emb_hypotheses = torch.transpose(emb_hypotheses, 0, 1)
+        emb_premises = self.dropout(emb_premises)
+        emb_hypotheses = self.dropout(emb_hypotheses)
         logging.debug(f"emb: {emb_hypotheses.shape}")
         # (L, N, E)
 
         encoded_premises, _ = self._encoder(emb_premises)
         encoded_hypotheses, _ = self._encoder(emb_hypotheses)
+        encoded_premises = self.dropout(encoded_premises)
+        encoded_hypotheses = self.dropout(encoded_hypotheses)
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -69,6 +85,8 @@ class ESIM(nn.Module):
         
         composited_premises, _ = self._compositor(projected_premises)
         composited_hypotheses, _ = self._compositor(projected_hypotheses)
+        composited_premises = self.dropout(composited_premises)
+        composited_hypotheses = self.dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -95,31 +113,31 @@ class ESIM(nn.Module):
                 ), -1)
         logging.debug(f"final_features: {final_features.shape}")
         
-        logits = tanh(self._mlp_1(final_features))
-        logging.debug(f"mlp1: {logits.shape}")
-        logits = self._mlp_2(logits)
-        logging.debug(f"mlp2: {logits.shape}")
+        probs = self._classifier(final_features)
 
-        probs = self._softmax(logits)
-
-        return probs
+        return probs, torch.argmax(probs, dim=1)
 
 
 class ESIMV1(nn.Module):
-    def __init__(self, vocab_size, embedding_size, emb, max_len=64) -> None:
+    def __init__(self, vocab_size, embedding_size, emb, max_len=64, dropout=0.5) -> None:
         super().__init__()
 
+        self._dropout = nn.Dropout(p=dropout)
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len)
         self._emb.from_pretrained(emb)
-        self.encoder_layer = nn.TransformerEncoderLayer(embedding_size, nhead=6, dim_feedforward= embedding_size * 4, dropout=0.2)
+        self.encoder_layer = nn.TransformerEncoderLayer(embedding_size, nhead=6, dim_feedforward= embedding_size * 4, dropout=dropout)
         self._encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=1)
-        self._soft_attention = nn.MultiheadAttention(embedding_size, 1, dropout=0.2)
+        self._soft_attention = nn.MultiheadAttention(embedding_size, 1, dropout=0)
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
         self._compositor = nn.TransformerEncoder(self.encoder_layer, num_layers=1)
-        self._dropout = nn.Dropout (p=0.2)
-        self._mlp_1 = nn.Linear(embedding_size * 4, embedding_size)
-        self._mlp_2 = nn.Linear(embedding_size, 2)
-        self._softmax = nn.Softmax(dim=1)
+        self._classifier = nn.Sequential(
+                nn.Dropout(p=dropout),
+                nn.Linear(embedding_size * 4, embedding_size),
+                nn.Tanh(),
+                nn.Dropout(p=dropout),
+                nn.Linear(embedding_size, 2),
+                nn.Softmax(dim=1)
+                )
 
     def forward(self, premises, premises_mask, hypotheses, hypotheses_mask):
         '''input: premises and  hypotheses shape is (L, N)
@@ -139,6 +157,8 @@ class ESIMV1(nn.Module):
 
         encoded_premises = self._encoder(emb_premises)
         encoded_hypotheses = self._encoder(emb_hypotheses)
+        encoded_premises = self._dropout(encoded_premises)
+        encoded_hypotheses = self._dropout(encoded_hypotheses)
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
         # (L, N, E)
@@ -172,6 +192,8 @@ class ESIMV1(nn.Module):
         
         composited_premises = self._compositor(projected_premises)
         composited_hypotheses = self._compositor(projected_hypotheses)
+        composited_premises = self._dropout(composited_premises)
+        composited_hypotheses = self._dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, E)
@@ -198,12 +220,28 @@ class ESIMV1(nn.Module):
                 ), -1)
         logging.debug(f"final_features: {final_features.shape}")
         
-        logits = tanh(self._mlp_1(final_features))
-        logits = self._dropout(logits)
-        logging.debug(f"mlp1: {logits.shape}")
-        logits = self._mlp_2(logits)
-        logging.debug(f"mlp2: {logits.shape}")
 
-        probs = self._softmax(logits)
+        probs = self._classifier(final_features)
 
-        return probs
+        return probs, torch.argmax(probs)
+
+def _init_weights(module):
+    if isinstance(module, nn.Linear):
+        nn.init.xavier_uniform_(module.weight.data)
+        nn.init.constant_(module.bias.data, 0.0)
+
+    elif isinstance(module, nn.LSTM):
+        nn.init.xavier_uniform_(module.weight_ih_l0.data)
+        nn.init.orthogonal_(module.weight_hh_l0.data)
+        nn.init.constant_(module.bias_ih_l0.data, 0.0)
+        nn.init.constant_(module.bias_hh_l0.data, 0.0)
+        hidden_size = module.bias_hh_l0.data.shape[0] // 4
+        module.bias_hh_l0.data[hidden_size: (2 * hidden_size)] = 1.0
+
+        if module.bidirectional:
+            nn.init.xavier_uniform_(module.weight_ih_l0_reverse.data)
+            nn.init.orthogonal_(module.weight_hh_l0_reverse.data)
+            nn.init.constant_(module.bias_ih_l0_reverse.data, 0.0)
+            nn.init.constant_(module.bias_hh_l0_reverse.data, 0.0)
+            module.bias_hh_l0_reverse.data[hidden_size: (2 * hidden_size)] = 1.0
+
