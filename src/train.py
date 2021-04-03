@@ -66,7 +66,7 @@ def main():
 
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
+    logging.basicConfig(filename=args.log_file, level=logging.INFO, format=LOG_FORMAT, datefmt=DATE_FORMAT)
 
     logging.info("start preparing data")
     data_preprocessor = DataPreprocess()
@@ -89,8 +89,8 @@ def main():
         model = model.cuda()
 
     logging.info("start training")
-    neg_auc, pos_auc = validate(model, dev_dataset)
-    logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
+    # neg_auc, pos_auc = validate(model, dev_dataset)
+    # logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
     for epoch in range(args.epoch):
         running_loss = 0.0
         epoch_acc_num, epoche_total_num = 0, 0

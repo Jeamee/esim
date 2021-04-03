@@ -14,6 +14,7 @@ MAX_LENGTH=64
 MAX_GRAD_NORM=10
 CHECKPOINT=../checkpoint
 
+
 python ../src/train.py --epoch=$EPOCH --seed=$SEED --emb_file=$EMB_FILE --train_file=$TRAIN_FILE --max_grad_norm=$MAX_GRAD_NORM \
     --ratio=$RATIO --vocab_size=$VOCAB_SIZE --emb_size=$EMB_SIZE --learning_rate=$LEARNING_RATE --batch_size=$BATCH_SIZE --max_length=$MAX_LENGTH --checkpoint=$CHECKPOINT
 
