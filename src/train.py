@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--emb_file", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--train_file", type=str, required=True)
-    parser.add_argument("--log_file", type=str, required=True)
+    parser.add_argument("--log_file", type=str, required=False)
     parser.add_argument("--ratio", type=str, required=True)
     parser.add_argument("--vocab_size", type=int, required=True)
     parser.add_argument("--emb_size", type=int, required=True)
@@ -66,7 +66,7 @@ def main():
 
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
-    logging.basicConfig(filename=args.log_file, level=logging.INFO, format=LOG_FORMAT, datefmt=DATE_FORMAT)
+    logging.basicConfig(filename=args.log_file, level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
 
     logging.info("start preparing data")
     data_preprocessor = DataPreprocess()

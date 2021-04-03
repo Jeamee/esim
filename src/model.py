@@ -1,4 +1,8 @@
 from torch import tanh
+
+from layers import MaskedAttention
+
+
 import logging
 
 import torch
@@ -14,13 +18,9 @@ class ESIM(nn.Module):
         self._emb.from_pretrained(emb)
         self.dropout = nn.Dropout(p=dropout)
         self._encoder = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
-        nn.init.orthogonal_(self._encoder.weight_ih_l0)
-        nn.init.orthogonal_(self._encoder.weight_hh_l0)
-        self._soft_attention = nn.MultiheadAttention(embedding_size * 2, 1, dropout=0)
+        self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 8, embedding_size)
         self._compositor = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
-        nn.init.orthogonal_(self._compositor.weight_ih_l0)
-        nn.init.orthogonal_(self._compositor.weight_hh_l0)
         self._classifier = nn.Sequential(
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size * 8, embedding_size),
@@ -29,15 +29,21 @@ class ESIM(nn.Module):
                 nn.Linear(embedding_size, 2),
                 nn.Softmax(dim=1)
                 )
+        self.apply(_init_weights)
 
     def forward(self, premises, premises_mask, hypotheses, hypotheses_mask):
-        '''input: premises and  hypotheses shape is (L, N)
         '''
+        params 
+            premises: (S, N, H)
+            hypotheses: (T, N, H)
+        '''
+
+        logging.debug(f"mask shape: {premises_mask.shape}")
 
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
-        emb_premises += premises_mask
-        emb_hypotheses += hypotheses_mask
+        # emb_premises += premises_mask
+        # emb_hypotheses += hypotheses_mask
         logging.debug(emb_hypotheses.shape)
 
         # (N, L, E)
@@ -52,12 +58,12 @@ class ESIM(nn.Module):
         encoded_hypotheses, _ = self._encoder(emb_hypotheses)
         encoded_premises = self.dropout(encoded_premises)
         encoded_hypotheses = self.dropout(encoded_hypotheses)
+        logging.debug(f"encoded: {encoded_premises.shape}")
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
         # (L, N, 2 * E)
 
-        interacted_premises, _ = self._soft_attention(encoded_premises, encoded_hypotheses, encoded_hypotheses)
-        interacted_hypotheses, _ = self._soft_attention(encoded_hypotheses, encoded_premises, encoded_premises)
+        interacted_premises, interacted_hypotheses = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
         logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
         # (L, N, 2 * E)

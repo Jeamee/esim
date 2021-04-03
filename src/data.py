@@ -187,6 +187,9 @@ class CompDataSet(Dataset):
         self.has_cuda = torch.cuda.is_available()
 
     def pad(self, parts: list):
+        """
+        padding indices are fill with 0
+        """
         length = len(parts)
         if length == self.max_len:
             return [[1] * self.emb_size for _ in range(length)]
@@ -199,10 +202,10 @@ class CompDataSet(Dataset):
                 else:
                     parts.pop(0)
                     tail = True
-            return [[1] * self.emb_size for _ in range(self.max_len)]
+            return [1] * self.max_len
         pads = ["<seq>"] * (self.max_len - length)
-        pad_masks = [[1] * self.emb_size for _ in range(length)]
-        pad_masks.extend([[0] * self.emb_size for _ in range(self.max_len - length)])
+        pad_masks = [1] * length
+        pad_masks.extend([0] * (self.max_len - length))
         parts.extend(pads)
 
         return pad_masks
@@ -230,7 +233,7 @@ class CompDataSet(Dataset):
         pad_masks = self.pad(chars)
         indices = [self.word_idx_map[char] if char in self.word_idx_map else self.word_idx_map["<unk>"] for char in chars]
 
-        return torch.LongTensor(indices), torch.FloatTensor(pad_masks)
+        return torch.LongTensor(indices), torch.FloatTensor([pad_masks])
 
     def __getitem__(self, index):
         _, premise, hypothese, label = self.data[index]

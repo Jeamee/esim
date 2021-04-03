@@ -6,11 +6,11 @@
           "name": "pydebug: Launch",
           "type": "python",
           "request": "launch",
-          "python": "~/miniconda3/envs/py37/bin/python",
+          "python": "/usr/local/Caskroom/miniconda/base/envs/py39/bin/python",
           "stopOnEntry": true,
           "console": "externalTerminal",
-          "debugOptions": [],
-          "program": "./data.py"
+          "args": ["--epoch", "1", "--seed", "43", "--emb_file", "../data/vectors.txt", "--train_file", "../data/gaiic_track3_round1_train_20210228.tsv", "--max_grad_norm", "10", "--ratio", "0.95,0.05", "--vocab_size", "10000", "--emb_size", "300", "--learning_rate", "0.00001", "--batch_size", "2", "--max_length", "64", "--checkpoint", "../checkpoint"],
+          "program": "./train.py"
         }
       }
     }
