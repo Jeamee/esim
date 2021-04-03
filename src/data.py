@@ -34,7 +34,7 @@ def add_mask(row):
     row[1].text2 = (" ").join(text2)
 
 
-def load_output_corpus(self, tsv: list, outfile: str) -> None:
+def load_output_corpus(tsv: list, outfile: str) -> None:
     corpus = []
     for sub_tsv in tsv:
         tsv_data = pd.read_csv(
@@ -262,3 +262,11 @@ class CompDataSet(Dataset):
 
     def __len__(self):
         return len(self.data)
+
+
+def main():
+    load_output_corpus(["../data/gaiic_track3_round1_testA_20210228.tsv", "../data/gaiic_track3_round1_train_20210228.tsv"], "../data/corpus")
+
+
+if __name__ == "__main__":
+    main()
