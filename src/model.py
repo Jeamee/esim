@@ -27,7 +27,7 @@ class ESIM(nn.Module):
                 nn.Tanh(),
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size, 2),
-                nn.Softmax(dim=1)
+                nn.Softmax(dim=-1)
                 )
         self.apply(_init_weights)
 
@@ -97,12 +97,10 @@ class ESIM(nn.Module):
 
         # (L, N, 2 * E)
 
-
-
-        avg_premises = torch.mean(composited_premises, 0)
-        avg_hypotheses = torch.mean(composited_hypotheses, 0)
-        max_premises, _ = torch.max(composited_premises, 0)
-        max_hypotheses, _ = torch.max(composited_hypotheses, 0)
+        avg_premises = torch.mean(composited_premises, 0, keepdim=True)
+        avg_hypotheses = torch.mean(composited_hypotheses, 0, keepdim=True)
+        max_premises, _ = torch.max(composited_premises, 0, keepdim=True)
+        max_hypotheses, _ = torch.max(composited_hypotheses, 0, keepdim=True)
         logging.debug(f"max features: {max_premises.shape}")
 
         avg_premises = torch.squeeze(avg_premises, 0)
@@ -121,7 +119,11 @@ class ESIM(nn.Module):
         
         probs = self._classifier(final_features)
 
-        return probs, torch.argmax(probs, dim=1)
+        logging.debug(f"probs: {probs.shape}")
+        return {
+                "probs": probs,
+                "label": torch.argmax(probs, dim=-1)
+                }
 
 
 class ESIMV1(nn.Module):

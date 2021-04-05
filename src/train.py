@@ -26,8 +26,8 @@ def validate(model, data):
         labels = []
         for step, data in enumerate(data):
             start_time = time.time()
-            outputs, _ = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
-            prob = outputs.tolist()
+            outputs = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            prob = outputs["probs"].tolist()
             probs.extend(prob)
             label = data["label"].tolist()
             labels.extend(label)
@@ -98,11 +98,11 @@ def main():
             start_time = time.time()
             optimizer.zero_grad()
 
-            outputs, labels = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
-            loss = criterion(outputs, data["label"])
+            outputs= model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            loss = criterion(outputs["probs"], data["label"])
             loss.backward()
 
-            for gold, pred in zip(data["label"], labels):
+            for gold, pred in zip(data["label"], outputs["label"]):
                 if gold == pred:
                     epoch_acc_num += 1
                 epoche_total_num += 1
