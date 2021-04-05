@@ -192,7 +192,7 @@ class CompDataSet(Dataset):
         """
         length = len(parts)
         if length == self.max_len:
-            return [[1] * self.emb_size for _ in range(length)]
+            return [1] * length
         if length > self.max_len:
             tail = True
             while len(parts) != self.max_len:
@@ -244,6 +244,7 @@ class CompDataSet(Dataset):
         premise, premise_mask = self.get_line_indices(premise)
         hypothese, hypothese_mask = self.get_line_indices(hypothese)
         label = torch.tensor(int(label), dtype=torch.long)
+        logging.debug(premise.shape, hypothese.shape)
 
         if self.has_cuda:
             premise = premise.cuda()

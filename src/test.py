@@ -23,8 +23,8 @@ def test(model, data):
     with torch.no_grad():
         probs = []
         for data in tqdm(data, total=len(data)):
-            outputs, _ = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
-            prob = outputs.tolist()
+            outputs = model(data["premise"], data["premise_mask"], data["hypothese"], data["hypothese_mask"])
+            prob = outputs["probs"].tolist()
             prob = [str(i[1]) for i in prob]
             probs.extend(prob)
     return probs 
@@ -49,7 +49,7 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     logging.info("start preparing data")
     data_preprocessor = DataPreprocess(random_state=args.seed)
