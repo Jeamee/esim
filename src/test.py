@@ -20,6 +20,7 @@ import torch
 
 
 def test(model, data):
+    model.eval()
     with torch.no_grad():
         probs = []
         for data in tqdm(data, total=len(data)):

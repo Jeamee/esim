@@ -45,6 +45,7 @@ def main():
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--emb_file", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--save_dir", type=str, required=True)
     parser.add_argument("--train_file", type=str, required=True)
     parser.add_argument("--log_file", type=str, required=False)
     parser.add_argument("--ratio", type=str, required=True)
@@ -80,11 +81,14 @@ def main():
     dev_dataset = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)
 
     logging.info("init model")
-    model = ESIM(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
+    start_epoch = 0
+    if args.checkpoint:
+        model = torch.load(args.checkpoint)
+        start_epoch = int(args.checkpoint.split("_")[0]) + 1
+    else:
+        model = ESIM(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
+
     optimizer = AdamW(model.parameters(), lr=args.learning_rate)
-    # optimizer = SGD(model.parameters(), lr=args.learning_rate)
-    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=0)
-    # criterion = CrossEntropyLoss()
     criterion = FocalLoss()
 
     if has_cuda:
@@ -94,10 +98,9 @@ def main():
     neg_auc, pos_auc = validate(model, dev_dataset)
     logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
 
-    patience_counter = 0
-    for epoch in range(args.epoch):
+    model.train()
+    for epoch in range(start_epoch, args.epoch):
         running_loss = 0.0
-        epoch_acc_num = 0
         for step, data in enumerate(train_dataset):
             start_time = time.time()
             optimizer.zero_grad()
@@ -106,14 +109,9 @@ def main():
             loss = criterion(outputs["probs"], data["label"])
             loss.backward()
 
-            # for gold, pred in zip(data["label"], outputs["label"]):
-            #     if gold == pred:
-            #         epoch_acc_num += 1
-
             clip_grad_norm_(model.parameters(), args.max_grad_norm)
             optimizer.step()
 
-            
             end_time = time.time()
             running_loss += loss.item()
             if step % 100 == 99:
@@ -122,10 +120,7 @@ def main():
             if step % 500 == 499:
                 neg_auc, pos_auc = validate(model, dev_dataset)
                 logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
-                torch.save(model, Path(args.checkpoint) / f"{epoch}_{step}.pt")
-        # epoch_acc = epoch_acc_num / len(train_dataset.dataset) 
-        # scheduler.step(epoch_acc)
-        
+                torch.save(model, Path(args.save_dir) / f"{epoch}_{step}.pt")
 
 
 if __name__ == "__main__":
