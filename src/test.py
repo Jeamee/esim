@@ -49,7 +49,7 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     logging.info("start preparing data")
     data_preprocessor = DataPreprocess(random_state=args.seed)

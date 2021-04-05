@@ -14,8 +14,7 @@ class ESIM(nn.Module):
     def __init__(self, vocab_size, embedding_size, emb, max_len=64, dropout=0.5) -> None:
         super().__init__()
 
-        self._emb = nn.Embedding(vocab_size, embedding_size, max_len)
-        self._emb.from_pretrained(emb)
+        self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
         self._encoder = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
         self._soft_attention = MaskedAttention()
@@ -42,8 +41,6 @@ class ESIM(nn.Module):
 
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
-        # emb_premises += premises_mask
-        # emb_hypotheses += hypotheses_mask
         logging.debug(emb_hypotheses.shape)
 
         # (N, L, E)

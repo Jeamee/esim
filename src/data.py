@@ -244,7 +244,6 @@ class CompDataSet(Dataset):
         premise, premise_mask = self.get_line_indices(premise)
         hypothese, hypothese_mask = self.get_line_indices(hypothese)
         label = torch.tensor(int(label), dtype=torch.long)
-        logging.debug(premise.shape, hypothese.shape)
 
         if self.has_cuda:
             premise = premise.cuda()
