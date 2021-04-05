@@ -123,56 +123,61 @@ class ESIM(nn.Module):
                 }
 
 
+
 class ESIMV1(nn.Module):
     def __init__(self, vocab_size, embedding_size, emb, max_len=64, dropout=0.5) -> None:
         super().__init__()
 
-        self._dropout = nn.Dropout(p=dropout)
-        self._emb = nn.Embedding(vocab_size, embedding_size, max_len)
-        self._emb.from_pretrained(emb)
-        self.encoder_layer = nn.TransformerEncoderLayer(embedding_size, nhead=6, dim_feedforward= embedding_size * 4, dropout=dropout)
-        self._encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=1)
-        self._soft_attention = nn.MultiheadAttention(embedding_size, 1, dropout=0)
-        self._projector = nn.Linear(embedding_size * 4, embedding_size)
-        self._compositor = nn.TransformerEncoder(self.encoder_layer, num_layers=1)
+        self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
+        self.dropout = nn.Dropout(p=dropout)
+        self._encoder = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
+        self._soft_attention = MaskedAttention()
+        self._projector = nn.Linear(embedding_size * 8, embedding_size)
+        self._compositor = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
         self._classifier = nn.Sequential(
                 nn.Dropout(p=dropout),
-                nn.Linear(embedding_size * 4, embedding_size),
+                nn.Linear(embedding_size * 8, embedding_size),
                 nn.Tanh(),
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size, 2),
-                nn.Softmax(dim=1)
+                nn.Softmax(dim=-1)
                 )
+        self.apply(_init_weights)
 
     def forward(self, premises, premises_mask, hypotheses, hypotheses_mask):
-        '''input: premises and  hypotheses shape is (L, N)
         '''
+        params 
+            premises: (S, N, H)
+            hypotheses: (T, N, H)
+        '''
+
+        logging.debug(f"mask shape: {premises_mask.shape}")
 
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
-        emb_premises += premises_mask
-        emb_hypotheses += hypotheses_mask
         logging.debug(emb_hypotheses.shape)
 
         # (N, L, E)
         emb_premises = torch.transpose(emb_premises, 0, 1)
         emb_hypotheses = torch.transpose(emb_hypotheses, 0, 1)
+        emb_premises = self.dropout(emb_premises)
+        emb_hypotheses = self.dropout(emb_hypotheses)
         logging.debug(f"emb: {emb_hypotheses.shape}")
         # (L, N, E)
 
-        encoded_premises = self._encoder(emb_premises)
-        encoded_hypotheses = self._encoder(emb_hypotheses)
-        encoded_premises = self._dropout(encoded_premises)
-        encoded_hypotheses = self._dropout(encoded_hypotheses)
+        encoded_premises, _ = self._encoder(emb_premises)
+        encoded_hypotheses, _ = self._encoder(emb_hypotheses)
+        encoded_premises = self.dropout(encoded_premises)
+        encoded_hypotheses = self.dropout(encoded_hypotheses)
+        logging.debug(f"encoded: {encoded_premises.shape}")
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
-        # (L, N, E)
+        # (L, N, 2 * E)
 
-        interacted_premises, _ = self._soft_attention(encoded_premises, encoded_hypotheses, encoded_hypotheses)
-        interacted_hypotheses, _ = self._soft_attention(encoded_hypotheses, encoded_premises, encoded_premises)
+        interacted_premises, interacted_hypotheses = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
         logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
-        # (L, N, E)
+        # (L, N, 2 * E)
 
         enhanced_premises = torch.cat(
                     (encoded_premises,
@@ -187,7 +192,7 @@ class ESIMV1(nn.Module):
                     torch.mul(encoded_hypotheses ,interacted_hypotheses
                 )), 2)
         logging.debug(f"enhanced: {enhanced_hypotheses.shape}")
-        # (N, L, 4 * E)
+        # (N, L, 8 * E)
 
         projected_premises = F.relu(self._projector(enhanced_premises))
         projected_hypotheses = F.relu(self._projector(enhanced_hypotheses))
@@ -195,20 +200,18 @@ class ESIMV1(nn.Module):
 
         # (L, N, E)
         
-        composited_premises = self._compositor(projected_premises)
-        composited_hypotheses = self._compositor(projected_hypotheses)
-        composited_premises = self._dropout(composited_premises)
-        composited_hypotheses = self._dropout(composited_hypotheses)
+        composited_premises, _ = self._compositor(projected_premises)
+        composited_hypotheses, _ = self._compositor(projected_hypotheses)
+        composited_premises = self.dropout(composited_premises)
+        composited_hypotheses = self.dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
-        # (L, N, E)
+        # (L, N, 2 * E)
 
-
-
-        avg_premises = torch.mean(composited_premises, 0)
-        avg_hypotheses = torch.mean(composited_hypotheses, 0)
-        max_premises, _ = torch.max(composited_premises, 0)
-        max_hypotheses, _ = torch.max(composited_hypotheses, 0)
+        avg_premises = torch.mean(composited_premises, 0, keepdim=True)
+        avg_hypotheses = torch.mean(composited_hypotheses, 0, keepdim=True)
+        max_premises, _ = torch.max(composited_premises, 0, keepdim=True)
+        max_hypotheses, _ = torch.max(composited_hypotheses, 0, keepdim=True)
         logging.debug(f"max features: {max_premises.shape}")
 
         avg_premises = torch.squeeze(avg_premises, 0)
@@ -225,11 +228,13 @@ class ESIMV1(nn.Module):
                 ), -1)
         logging.debug(f"final_features: {final_features.shape}")
         
-
         probs = self._classifier(final_features)
 
-        return probs, torch.argmax(probs)
-
+        logging.debug(f"probs: {probs.shape}")
+        return {
+                "probs": probs,
+                "label": torch.argmax(probs, dim=-1)
+                }
 def _init_weights(module):
     if isinstance(module, nn.Linear):
         nn.init.xavier_uniform_(module.weight.data)
