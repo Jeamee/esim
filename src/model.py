@@ -53,8 +53,6 @@ class ESIM(nn.Module):
 
         encoded_premises, _ = self._encoder(emb_premises)
         encoded_hypotheses, _ = self._encoder(emb_hypotheses)
-        encoded_premises = self.dropout(encoded_premises)
-        encoded_hypotheses = self.dropout(encoded_hypotheses)
         logging.debug(f"encoded: {encoded_premises.shape}")
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
@@ -82,14 +80,14 @@ class ESIM(nn.Module):
 
         projected_premises = F.relu(self._projector(enhanced_premises))
         projected_hypotheses = F.relu(self._projector(enhanced_hypotheses))
+        projected_premises = self.dropout(projected_premises)
+        projected_hypotheses = self.dropout(projected_hypotheses)
         logging.debug(f"projected: {projected_hypotheses.shape}")
 
         # (L, N, E)
         
         composited_premises, _ = self._compositor(projected_premises)
         composited_hypotheses, _ = self._compositor(projected_hypotheses)
-        composited_premises = self.dropout(composited_premises)
-        composited_hypotheses = self.dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -130,13 +128,15 @@ class ESIMV1(nn.Module):
 
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
-        self._encoder = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
+        self._transformer = nn.TransformerEncoderLayer(embedding_size, 8, dim_feedforward= embedding_size * 4, activation="gelu")
+        self._layer_norm = nn.LayerNorm(-1)
+        self._encoder = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
         self._soft_attention = MaskedAttention()
-        self._projector = nn.Linear(embedding_size * 8, embedding_size)
-        self._compositor = nn.LSTM(embedding_size, embedding_size, bidirectional=True)
+        self._projector = nn.Linear(embedding_size * 4, embedding_size)
+        self._compositor = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
         self._classifier = nn.Sequential(
                 nn.Dropout(p=dropout),
-                nn.Linear(embedding_size * 8, embedding_size),
+                nn.Linear(embedding_size * 4, embedding_size),
                 nn.Tanh(),
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size, 2),
@@ -153,6 +153,9 @@ class ESIMV1(nn.Module):
 
         logging.debug(f"mask shape: {premises_mask.shape}")
 
+        premises_mask_bool = premises_mask == 0
+        hypotheses_mask_bool = hypotheses_mask == 0
+
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
         logging.debug(emb_hypotheses.shape)
@@ -165,8 +168,8 @@ class ESIMV1(nn.Module):
         logging.debug(f"emb: {emb_hypotheses.shape}")
         # (L, N, E)
 
-        encoded_premises, _ = self._encoder(emb_premises)
-        encoded_hypotheses, _ = self._encoder(emb_hypotheses)
+        encoded_premises, _ = self._encoder(emb_premises, src_key_padding_mask=premises_mask_bool)
+        encoded_hypotheses, _ = self._encoder(emb_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
         encoded_premises = self.dropout(encoded_premises)
         encoded_hypotheses = self.dropout(encoded_hypotheses)
         logging.debug(f"encoded: {encoded_premises.shape}")
@@ -200,8 +203,8 @@ class ESIMV1(nn.Module):
 
         # (L, N, E)
         
-        composited_premises, _ = self._compositor(projected_premises)
-        composited_hypotheses, _ = self._compositor(projected_hypotheses)
+        composited_premises, _ = self._compositor(projected_premises, src_key_padding_mask=premises_mask_bool)
+        composited_hypotheses, _ = self._compositor(projected_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
         composited_premises = self.dropout(composited_premises)
         composited_hypotheses = self.dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
