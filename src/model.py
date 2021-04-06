@@ -58,7 +58,7 @@ class ESIM(nn.Module):
 
         # (L, N, 2 * E)
 
-        interacted_premises, interacted_hypotheses = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
+        interacted_premises, interacted_hypotheses, _, _ = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
         logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -129,11 +129,10 @@ class ESIMV1(nn.Module):
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
         self._transformer = nn.TransformerEncoderLayer(embedding_size, 8, dim_feedforward= embedding_size * 4, activation="relu")
-        self._layer_norm = nn.LayerNorm(embedding_size)
-        self._encoder = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
+        self._encoder = nn.TransformerEncoder(self._transformer, 3)
         self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
-        self._compositor = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
+        self._compositor = nn.TransformerEncoder(self._transformer, 3)
         self._classifier = nn.Sequential(
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size * 4, embedding_size),
@@ -177,7 +176,7 @@ class ESIMV1(nn.Module):
 
         # (L, N, 2 * E)
 
-        interacted_premises, interacted_hypotheses = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
+        interacted_premises, interacted_hypotheses, _, _ = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
         logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -260,18 +259,18 @@ def _init_weights(module):
             module.bias_hh_l0_reverse.data[hidden_size: (2 * hidden_size)] = 1.0
 
 
-class ESIMV1(nn.Module):
+class ESIMV2(nn.Module):
     def __init__(self, vocab_size, embedding_size, emb, max_len=64, dropout=0.5) -> None:
         super().__init__()
 
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
-        self._transformer = nn.TransformerEncoderLayer(embedding_size, 8, dim_feedforward= embedding_size * 4, activation="gelu")
+        self._transformer = nn.TransformerEncoderLayer(embedding_size, 4, dim_feedforward= embedding_size * 4, activation="gelu")
         self._layer_norm = nn.LayerNorm(embedding_size)
-        self._encoder = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
+        self._encoder = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
         self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
-        self._compositor = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
+        self._compositor = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
         self._classifier = nn.Sequential(
                 nn.Dropout(p=dropout),
                 nn.Linear(embedding_size * 4, embedding_size),
@@ -315,39 +314,24 @@ class ESIMV1(nn.Module):
 
         # (L, N, 2 * E)
 
-        interacted_premises, interacted_hypotheses = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
+        interacted_premises, interacted_hypotheses, _, _ = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
         logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
         # (L, N, 2 * E)
 
-        enhanced_premises = torch.cat(
-                    (encoded_premises,
-                    interacted_premises,
-                    encoded_premises - interacted_premises,
-                    torch.mul(encoded_premises ,interacted_premises
-                )), 2)
-        enhanced_hypotheses = torch.cat(
-                    (encoded_hypotheses,
-                    interacted_hypotheses,
-                    encoded_hypotheses - interacted_hypotheses,
-                    torch.mul(encoded_hypotheses ,interacted_hypotheses
-                )), 2)
-        logging.debug(f"enhanced: {enhanced_hypotheses.shape}")
-        # (N, L, 8 * E)
-
-        projected_premises = F.relu(self._projector(enhanced_premises))
-        projected_hypotheses = F.relu(self._projector(enhanced_hypotheses))
-        projected_premises = self.dropout(projected_premises)
-        projected_hypotheses = self.dropout(projected_hypotheses)
-        logging.debug(f"projected: {projected_hypotheses.shape}")
+        interacted_premises = self.dropout(interacted_premises)
+        interacted_hypotheses = self.dropout(interacted_hypotheses)
+        logging.debug(f"interacted: {interacted_hypotheses.shape}")
 
         # (L, N, E)
         
-        composited_premises = self._compositor(projected_premises, src_key_padding_mask=premises_mask_bool)
-        composited_hypotheses = self._compositor(projected_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
+        composited_premises = self._compositor(interacted_premises, src_key_padding_mask=premises_mask_bool)
+        composited_hypotheses = self._compositor(interacted_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, 2 * E)
+
+        interacted_premises, interacted_hypotheses, _, _ = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
 
         avg_premises = torch.mean(composited_premises, 0, keepdim=True)
         avg_hypotheses = torch.mean(composited_hypotheses, 0, keepdim=True)

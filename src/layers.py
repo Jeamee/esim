@@ -53,7 +53,7 @@ class MaskedAttention(nn.Module):
         new_hypotheses = new_hypotheses.transpose(0, 1)
         # (T, N, H)
 
-        return new_premises, new_hypotheses
+        return new_premises, new_hypotheses, attn_premises, attn_hypotheses
 
 
 class FocalLoss(nn.Module):
