@@ -22,6 +22,7 @@ import torch
 
 
 def validate(model, data):
+    model.eval()
     with torch.no_grad():
         probs = []
         labels = []
@@ -98,10 +99,10 @@ def main():
     neg_auc, pos_auc = validate(model, dev_dataset)
     logging.info(f"pre-train neg_auc {str(neg_auc)} pos_auc {str(pos_auc)}")
 
-    model.train()
     for epoch in range(start_epoch, args.epoch):
         running_loss = 0.0
         for step, data in enumerate(train_dataset):
+            model.train()
             start_time = time.time()
             optimizer.zero_grad()
 
