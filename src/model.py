@@ -129,7 +129,7 @@ class ESIMV1(nn.Module):
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
         self._transformer = nn.TransformerEncoderLayer(embedding_size, 8, dim_feedforward= embedding_size * 4, activation="gelu")
-        self._layer_norm = nn.LayerNorm(-1)
+        self._layer_norm = nn.LayerNorm(2)
         self._encoder = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
         self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
@@ -170,8 +170,6 @@ class ESIMV1(nn.Module):
 
         encoded_premises, _ = self._encoder(emb_premises, src_key_padding_mask=premises_mask_bool)
         encoded_hypotheses, _ = self._encoder(emb_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
-        encoded_premises = self.dropout(encoded_premises)
-        encoded_hypotheses = self.dropout(encoded_hypotheses)
         logging.debug(f"encoded: {encoded_premises.shape}")
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
@@ -199,14 +197,14 @@ class ESIMV1(nn.Module):
 
         projected_premises = F.relu(self._projector(enhanced_premises))
         projected_hypotheses = F.relu(self._projector(enhanced_hypotheses))
+        projected_premises = self.dropout(projected_premises)
+        projected_hypotheses = self.dropout(projected_hypotheses)
         logging.debug(f"projected: {projected_hypotheses.shape}")
 
         # (L, N, E)
         
         composited_premises, _ = self._compositor(projected_premises, src_key_padding_mask=premises_mask_bool)
         composited_hypotheses, _ = self._compositor(projected_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
-        composited_premises = self.dropout(composited_premises)
-        composited_hypotheses = self.dropout(composited_hypotheses)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, 2 * E)
@@ -238,6 +236,7 @@ class ESIMV1(nn.Module):
                 "probs": probs,
                 "label": torch.argmax(probs, dim=-1)
                 }
+
 def _init_weights(module):
     if isinstance(module, nn.Linear):
         nn.init.xavier_uniform_(module.weight.data)
