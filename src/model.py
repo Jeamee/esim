@@ -326,8 +326,8 @@ class ESIMV2(nn.Module):
 
         # (L, N, 2 * E)
 
-        _, _, score_hypotheses = self._soft_attention(encoded_premises, premises_mask, composited_premises, premises_mask)
-        _, _, score_premises = self._soft_attention(encoded_hypotheses, hypotheses_mask, composited_hypotheses, hypotheses_mask)
+        _, _, score_hypotheses, _ = self._soft_attention(encoded_premises, premises_mask, composited_premises, premises_mask)
+        _, _, score_premises, _ = self._soft_attention(encoded_hypotheses, hypotheses_mask, composited_hypotheses, hypotheses_mask)
 
 
         final_features = torch.cat((
