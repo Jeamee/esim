@@ -266,17 +266,12 @@ class ESIMV2(nn.Module):
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
         self._transformer = nn.TransformerEncoderLayer(embedding_size, 4, dim_feedforward= embedding_size * 4, activation="gelu")
-        self._layer_norm = nn.LayerNorm(embedding_size)
-        self._encoder = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
+        self._encoder = nn.TransformerEncoder(self._transformer, 3)
         self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
-        self._compositor = nn.TransformerEncoder(self._transformer, 3, norm=self._layer_norm)
+        self._compositor = nn.TransformerEncoder(self._transformer, 3)
         self._classifier = nn.Sequential(
-                nn.Dropout(p=dropout),
-                nn.Linear(embedding_size * 4, embedding_size),
-                nn.Tanh(),
-                nn.Dropout(p=dropout),
-                nn.Linear(embedding_size, 2),
+                nn.Linear(max_len * 2, 2),
                 nn.Softmax(dim=-1)
                 )
         self.apply(_init_weights)
@@ -331,26 +326,15 @@ class ESIMV2(nn.Module):
 
         # (L, N, 2 * E)
 
-        interacted_premises, interacted_hypotheses, _, _ = self._soft_attention(encoded_premises, premises_mask, encoded_hypotheses, hypotheses_mask)
+        _, _, score_hypotheses = self._soft_attention(encoded_premises, premises_mask, composited_premises, premises_mask)
+        _, _, score_premises = self._soft_attention(encoded_hypotheses, hypotheses_mask, composited_hypotheses, hypotheses_mask)
 
-        avg_premises = torch.mean(composited_premises, 0, keepdim=True)
-        avg_hypotheses = torch.mean(composited_hypotheses, 0, keepdim=True)
-        max_premises, _ = torch.max(composited_premises, 0, keepdim=True)
-        max_hypotheses, _ = torch.max(composited_hypotheses, 0, keepdim=True)
-        logging.debug(f"max features: {max_premises.shape}")
 
-        avg_premises = torch.squeeze(avg_premises, 0)
-        avg_hypotheses = torch.squeeze(avg_hypotheses, 0)
-        max_premises = torch.squeeze(max_premises, 0)
-        max_hypotheses = torch.squeeze(max_hypotheses, 0)
-        logging.debug(f"max features: {max_premises.shape}")
+        final_features = torch.cat((
+                score_premises,
+                score_hypotheses
+            ), -1)
 
-        final_features = torch.cat(
-                    (avg_premises,
-                    avg_hypotheses,
-                    max_premises,
-                    max_hypotheses
-                ), -1)
         logging.debug(f"final_features: {final_features.shape}")
         
         probs = self._classifier(final_features)
