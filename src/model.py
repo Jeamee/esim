@@ -170,8 +170,8 @@ class ESIMV1(nn.Module):
         logging.debug(f"emb: {emb_hypotheses.shape}")
         # (L, N, E)
 
-        encoded_premises, _ = self._encoder(emb_premises, src_key_padding_mask=premises_mask_bool)
-        encoded_hypotheses, _ = self._encoder(emb_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
+        encoded_premises = self._encoder(emb_premises, src_key_padding_mask=premises_mask_bool)
+        encoded_hypotheses = self._encoder(emb_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
         logging.debug(f"encoded: {encoded_premises.shape}")
         logging.debug(f"encoded: {encoded_hypotheses.shape}")
 
@@ -205,8 +205,8 @@ class ESIMV1(nn.Module):
 
         # (L, N, E)
         
-        composited_premises, _ = self._compositor(projected_premises, src_key_padding_mask=premises_mask_bool)
-        composited_hypotheses, _ = self._compositor(projected_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
+        composited_premises = self._compositor(projected_premises, src_key_padding_mask=premises_mask_bool)
+        composited_hypotheses = self._compositor(projected_hypotheses, src_key_padding_mask=hypotheses_mask_bool)
         logging.debug(f"composited: {composited_hypotheses.shape}")
 
         # (L, N, 2 * E)
