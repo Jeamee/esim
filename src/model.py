@@ -129,7 +129,7 @@ class ESIMV1(nn.Module):
         self._emb = nn.Embedding(vocab_size, embedding_size, max_len, _weight=emb)
         self.dropout = nn.Dropout(p=dropout)
         self._transformer = nn.TransformerEncoderLayer(embedding_size, 8, dim_feedforward= embedding_size * 4, activation="gelu")
-        self._layer_norm = nn.LayerNorm(2)
+        self._layer_norm = nn.LayerNorm(embedding_size)
         self._encoder = nn.TransformerEncoder(self._transformer, 1, norm=self._layer_norm)
         self._soft_attention = MaskedAttention()
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
