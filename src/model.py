@@ -271,7 +271,7 @@ class ESIMV2(nn.Module):
         self._projector = nn.Linear(embedding_size * 4, embedding_size)
         self._compositor = nn.TransformerEncoder(self._transformer, 3)
         self._classifier = nn.Sequential(
-                nn.Linear(max_len * 2, 2),
+                nn.Linear(max_len * 4, 2),
                 nn.Softmax(dim=-1)
                 )
         self.apply(_init_weights)
@@ -337,9 +337,19 @@ class ESIMV2(nn.Module):
 
         logging.debug(f"final_features: {final_features.shape}")
         
-        probs = self._classifier(final_features)
+        avg = torch.mean(final_features, 1, keepdim=True)
+        maxi, _ = torch.max(final_features, 1, keepdim=True)
+        logging.debug(f"max features: {maxi.shape}")
 
+        avg = torch.squeeze(avg, 1)
+        maxi = torch.squeeze(maxi, 1)
+        logging.debug(f"max features: {maxi.shape}")
+        final_features = torch.cat(
+                    (avg, maxi), -1
+                )
+        probs = self._classifier(final_features)
         logging.debug(f"probs: {probs.shape}")
+
         return {
                 "probs": probs,
                 "label": torch.argmax(probs, dim=-1)
