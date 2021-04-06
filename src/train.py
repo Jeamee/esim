@@ -86,7 +86,7 @@ def main():
     start_epoch = 0
     if args.checkpoint:
         model = torch.load(args.checkpoint)
-        start_epoch = re.findall(r"\d+(?=\_\d+.pt", args.checkpoint)
+        start_epoch = re.findall("\d+(?=\_\d+.pt)", args.checkpoint)
         start_epoch = int(start_epoch[0]) + 1
     else:
         model = ESIM(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
