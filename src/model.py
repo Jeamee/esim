@@ -154,7 +154,9 @@ class ESIMV1(nn.Module):
         logging.debug(f"mask shape: {premises_mask.shape}")
 
         premises_mask_bool = premises_mask == 0
+        premises_mask_bool = premises_mask_bool.squeeze(1)
         hypotheses_mask_bool = hypotheses_mask == 0
+        hypotheses_mask_bool = hypotheses_mask_bool.squeeze(1)
 
         emb_premises = self._emb(premises)
         emb_hypotheses = self._emb(hypotheses)
