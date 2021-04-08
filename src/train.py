@@ -89,7 +89,7 @@ def main():
         start_epoch = re.findall("\d+(?=\_\d+.pt)", args.checkpoint)
         start_epoch = int(start_epoch[0]) + 1
     else:
-        model = ESIMV2(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
+        model = ESIM(args.vocab_size, args.emb_size, emb, max_len=args.max_length)
 
     optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     criterion = FocalLoss()

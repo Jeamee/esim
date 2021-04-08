@@ -46,8 +46,6 @@ class ESIM(nn.Module):
         # (N, L, E)
         emb_premises = torch.transpose(emb_premises, 0, 1)
         emb_hypotheses = torch.transpose(emb_hypotheses, 0, 1)
-        emb_premises = self.dropout(emb_premises)
-        emb_hypotheses = self.dropout(emb_hypotheses)
         logging.debug(f"emb: {emb_hypotheses.shape}")
         # (L, N, E)
 
